@@ -1,0 +1,16 @@
+[package]
+name = "xccute_decisions"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "MIT OR Apache-2.0"
+description = "The decision vocabulary of xccute: the questions a process asks before acting, the observation tools that answer them, guided paths with optional and required steps, runbooks and their journal."
+authors = ["James Hunt <james@1o.business>"]
+repository = "https://github.com/jameshuntt/xccute_decisions"
+readme = "README.md"
+keywords = ["cli", "command", "decision", "runbook", "observation"]
+categories = ["command-line-interface"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
+
+[dependencies]
+xccute_runtime = { version = "0.1.0", path = "../xccute_runtime" }
