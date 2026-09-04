@@ -91,14 +91,14 @@ version = "0.1.0"
 
 [[package]]
 name = "xccute_decisions"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "xccute_runtime",
 ]
 
 [[package]]
 name = "xccute_runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "sha2",
  "xccute_contract",

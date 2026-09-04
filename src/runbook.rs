@@ -95,7 +95,8 @@ impl DecisionConnectorSpec {
         }
     }
 
-    pub fn nodeplan(
+    /// A runbook request from a fleet supervisor.
+    pub fn supervisor(
         connector_id: impl Into<String>,
         function: impl Into<String>,
         operation_logical_id: impl Into<String>,
@@ -103,15 +104,16 @@ impl DecisionConnectorSpec {
     ) -> Self {
         Self::new(
             connector_id,
-            "nodeplan",
-            "nodeplan-control",
+            "supervisor",
+            "supervisor-control",
             function,
             operation_logical_id,
             requested_reason,
         )
     }
 
-    pub fn denv(
+    /// A runbook request from an environment daemon.
+    pub fn environment(
         connector_id: impl Into<String>,
         function: impl Into<String>,
         operation_logical_id: impl Into<String>,
@@ -119,8 +121,8 @@ impl DecisionConnectorSpec {
     ) -> Self {
         Self::new(
             connector_id,
-            "denv",
-            "denv-control",
+            "environment",
+            "environment-control",
             function,
             operation_logical_id,
             requested_reason,

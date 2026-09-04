@@ -17,13 +17,13 @@ fn digest(label: &str) -> StableDigest {
 
 fn active_pack() -> DecisionContextPack {
     DecisionContextPack {
-        pack_id: "nodeplan.active.context".to_string(),
+        pack_id: "fleet.active.context".to_string(),
         goal: "Ask only focused questions before the next dry-run decision.".to_string(),
-        journal_id: "nodeplan.bootstrap.journal".to_string(),
+        journal_id: "fleet.bootstrap.journal".to_string(),
         journal_digest: digest("journal.digest"),
         selected_replay_steps: vec![DecisionRunbookReplayStep {
             index: 0,
-            runbook_id: "nodeplan.error_review.runbook".to_string(),
+            runbook_id: "fleet.error_review.runbook".to_string(),
             mode: DecisionRunbookMode::ObservationOnly,
             record_digest: digest("record.digest"),
             compact_summary: "grep found no blocking ERROR lines".to_string(),
@@ -38,10 +38,10 @@ fn active_pack() -> DecisionContextPack {
                 "Did grep find blocking ERROR lines?",
             ),
             DecisionQuestionSpec::optional(
-                "check.nodeplan_process",
-                "proc.find_nodeplan",
+                "check.fleet_process",
+                "proc.find_fleet",
                 &pgrep_observation_tool(),
-                "Is a nodeplan process already running?",
+                "Is a fleet process already running?",
             ),
         ],
         context_budget_bytes: 2048,
@@ -53,7 +53,7 @@ fn context_request_selects_required_question_from_compact_pack() {
     let pack = active_pack();
 
     let request = DecisionContextRequest::required_from_context_pack(
-        "nodeplan.next.request",
+        "fleet.next.request",
         "Ask the minimum required evidence question.",
         &pack,
     )
@@ -65,7 +65,7 @@ fn context_request_selects_required_question_from_compact_pack() {
     assert_eq!(request.carried_replay_summaries.len(), 1);
     assert!(request.compact_request().contains("grep found no blocking ERROR lines"));
     assert!(request.compact_request().contains("Did grep find blocking ERROR lines?"));
-    assert!(!request.compact_request().contains("Is a nodeplan process already running?"));
+    assert!(!request.compact_request().contains("Is a fleet process already running?"));
 }
 
 #[test]
@@ -73,21 +73,21 @@ fn context_request_can_choose_named_optional_questions_without_raw_context_expan
     let pack = active_pack();
 
     let request = DecisionContextRequest::from_context_pack(
-        "nodeplan.process.request",
+        "fleet.process.request",
         "Ask a focused optional process question only if it helps the next step.",
         &pack,
         DecisionContextRequestSelection::ByLogicalIds(vec![
-            "check.nodeplan_process".to_string(),
+            "check.fleet_process".to_string(),
         ]),
         1,
     )
     .expect("named optional request should form");
 
-    assert_eq!(request.selected_question_ids(), vec!["check.nodeplan_process".to_string()]);
+    assert_eq!(request.selected_question_ids(), vec!["check.fleet_process".to_string()]);
     assert_eq!(request.selected_context_budget_hint(), 512);
     let compact = request.compact_request();
     assert!(compact.contains("pgrep.process_search"));
-    assert!(compact.contains("proc.find_nodeplan"));
+    assert!(compact.contains("proc.find_fleet"));
     assert!(!compact.contains("Did grep find blocking ERROR lines?"));
 }
 
@@ -96,7 +96,7 @@ fn context_request_rejects_bad_or_underfilled_question_selections() {
     let pack = active_pack();
 
     let empty = DecisionContextRequest::from_context_pack(
-        "nodeplan.empty.request",
+        "fleet.empty.request",
         "empty selections are not useful",
         &pack,
         DecisionContextRequestSelection::First(0),
@@ -105,7 +105,7 @@ fn context_request_rejects_bad_or_underfilled_question_selections() {
     assert!(matches!(empty, Err(DecisionContextRequestError::EmptyQuestionSelection)));
 
     let missing = DecisionContextRequest::from_context_pack(
-        "nodeplan.missing.request",
+        "fleet.missing.request",
         "unknown questions should not be invented",
         &pack,
         DecisionContextRequestSelection::ByLogicalIds(vec!["check.unknown".to_string()]),
@@ -118,7 +118,7 @@ fn context_request_rejects_bad_or_underfilled_question_selections() {
     ));
 
     let duplicate = DecisionContextRequest::from_context_pack(
-        "nodeplan.duplicate.request",
+        "fleet.duplicate.request",
         "question ids must be unique",
         &pack,
         DecisionContextRequestSelection::ByLogicalIds(vec![
@@ -134,7 +134,7 @@ fn context_request_rejects_bad_or_underfilled_question_selections() {
     ));
 
     let underfilled = DecisionContextRequest::from_context_pack(
-        "nodeplan.underfilled.request",
+        "fleet.underfilled.request",
         "minimum observation counts must be explicit",
         &pack,
         DecisionContextRequestSelection::First(1),
@@ -154,23 +154,23 @@ fn context_request_digest_tracks_selected_question_order() {
     let pack = active_pack();
 
     let errors_then_process = DecisionContextRequest::from_context_pack(
-        "nodeplan.ordered.request",
+        "fleet.ordered.request",
         "Question order is part of the contract.",
         &pack,
         DecisionContextRequestSelection::ByLogicalIds(vec![
             "check.errors".to_string(),
-            "check.nodeplan_process".to_string(),
+            "check.fleet_process".to_string(),
         ]),
         1,
     )
     .expect("ordered request should form");
 
     let process_then_errors = DecisionContextRequest::from_context_pack(
-        "nodeplan.ordered.request",
+        "fleet.ordered.request",
         "Question order is part of the contract.",
         &pack,
         DecisionContextRequestSelection::ByLogicalIds(vec![
-            "check.nodeplan_process".to_string(),
+            "check.fleet_process".to_string(),
             "check.errors".to_string(),
         ]),
         1,
@@ -185,7 +185,7 @@ fn context_request_materializes_runtime_observation_requirements() {
     let pack = active_pack();
 
     let request = DecisionContextRequest::from_context_pack(
-        "nodeplan.next.request",
+        "fleet.next.request",
         "Ask both focused questions.",
         &pack,
         DecisionContextRequestSelection::First(2),
@@ -197,7 +197,7 @@ fn context_request_materializes_runtime_observation_requirements() {
     assert_eq!(requirements.len(), 2);
     assert_eq!(requirements[0].logical_id.as_str(), "check.errors");
     assert!(requirements[0].required);
-    assert_eq!(requirements[1].logical_id.as_str(), "check.nodeplan_process");
+    assert_eq!(requirements[1].logical_id.as_str(), "check.fleet_process");
     assert!(!requirements[1].required);
 }
 
@@ -207,7 +207,7 @@ fn context_request_rejects_context_packs_without_active_questions() {
     pack.active_questions.clear();
 
     let request = DecisionContextRequest::from_context_pack(
-        "nodeplan.no_questions.request",
+        "fleet.no_questions.request",
         "a request needs at least one active question source",
         &pack,
         DecisionContextRequestSelection::RequiredOnly,

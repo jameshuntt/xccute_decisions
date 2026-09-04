@@ -3,7 +3,7 @@ use xccute_decisions::{DecisionPathStep, DecisionPathTemplate};
 #[test]
 fn decision_path_models_required_observation_before_operation() {
     let path = DecisionPathTemplate::new(
-        "nodeplan.error_review",
+        "fleet.error_review",
         "Only continue if the logs do not contain blocking error evidence.",
     )
     .step(DecisionPathStep::required_observation(
@@ -15,7 +15,7 @@ fn decision_path_models_required_observation_before_operation() {
     ))
     .step(DecisionPathStep::operation(
         "commit.receipt",
-        "nodeplan.commit_receipt",
+        "fleet.commit_receipt",
         "Commit only after evidence-backed decision context exists.",
     ));
 
@@ -25,19 +25,19 @@ fn decision_path_models_required_observation_before_operation() {
 
 #[test]
 fn decision_path_can_include_optional_observation_branches() {
-    let path = DecisionPathTemplate::new("denv.probe", "Probe environment before selecting a setup path.")
+    let path = DecisionPathTemplate::new("envd.probe", "Probe environment before selecting a setup path.")
         .step(DecisionPathStep::required_observation(
             "ask.config",
             "grep.pattern_search",
             "check.config",
-            "denv.grep_config",
+            "envd.grep_config",
             "Find whether the config already names the desired runtime.",
         ))
         .step(DecisionPathStep::optional_observation(
             "ask.process",
             "pgrep.process_search",
             "check.worker",
-            "denv.pgrep_worker",
+            "envd.pgrep_worker",
             "Optionally see if a worker is already running before starting one.",
         ))
         .step(DecisionPathStep::branch(

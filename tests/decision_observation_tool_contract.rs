@@ -35,7 +35,7 @@ fn grep_tool_builds_required_pattern_search_question() {
 fn pgrep_tool_can_make_optional_process_question() {
     let question = pgrep_observation_tool().default_optional_question(
         "check.worker",
-        "nodeplan.pgrep_worker",
+        "fleet.pgrep_worker",
     );
 
     assert_eq!(question.kind, RuntimeObservationKind::ProcessSearch);

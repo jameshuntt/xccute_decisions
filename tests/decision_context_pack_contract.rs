@@ -26,21 +26,21 @@ fn op(logical_id: &str, program: &str, argv: &[&str]) -> RuntimeOperation {
 }
 
 fn plan() -> RuntimeOperationPlan {
-    RuntimeOperationPlan::new("nodeplan.bootstrap")
-        .then(op("logs.grep_errors", "grep", &["ERROR", "nodeplan.log"]))
-        .then(op("proc.find_nodeplan", "pgrep", &["nodeplanctl"]))
-        .then(op("nodeplan.apply_dry_run", "nodeplanctl", &["apply", "--dry-run"]))
+    RuntimeOperationPlan::new("fleet.bootstrap")
+        .then(op("logs.grep_errors", "grep", &["ERROR", "fleet.log"]))
+        .then(op("proc.find_fleet", "pgrep", &["fleetctl"]))
+        .then(op("fleet.apply_dry_run", "fleetctl", &["apply", "--dry-run"]))
 }
 
 fn material_contract(plan: &RuntimeOperationPlan) -> (RuntimeMaterialManifest, RuntimePlanMaterialContract) {
-    let manifest = RuntimeMaterialManifest::new("nodeplan.materials");
+    let manifest = RuntimeMaterialManifest::new("fleet.materials");
     let contract = RuntimePlanMaterialContract::new(plan, &manifest);
     (manifest, contract)
 }
 
 fn guide() -> DecisionGuideTemplate {
     let path = DecisionPathTemplate::new(
-        "nodeplan.error_review.path",
+        "fleet.error_review.path",
         "Ask bounded questions before dry-run apply.",
     )
     .step(DecisionPathStep::required_observation(
@@ -53,14 +53,14 @@ fn guide() -> DecisionGuideTemplate {
     .step(DecisionPathStep::optional_observation(
         "ask.process_state",
         "pgrep.process_presence",
-        "check.nodeplan_process",
-        "proc.find_nodeplan",
+        "check.fleet_process",
+        "proc.find_fleet",
         "Process evidence can help explain why the dry-run path is safe.",
     ));
 
     DecisionGuideTemplate::new(
-        "nodeplan.error_review.guide",
-        "Decide whether the NodePlan dry-run should run.",
+        "fleet.error_review.guide",
+        "Decide whether the Supervisor dry-run should run.",
         path,
     )
     .ask(DecisionQuestionSpec::required(
@@ -70,10 +70,10 @@ fn guide() -> DecisionGuideTemplate {
         "Did grep find blocking ERROR lines?",
     ))
     .ask(DecisionQuestionSpec::optional(
-        "check.nodeplan_process",
-        "proc.find_nodeplan",
+        "check.fleet_process",
+        "proc.find_fleet",
         &pgrep_observation_tool(),
-        "Is a nodeplan process already running?",
+        "Is a fleet process already running?",
     ))
 }
 
@@ -95,8 +95,8 @@ fn observation_context(
         .operation_by_logical_id("logs.grep_errors")
         .expect("grep operation exists");
     let call = RuntimeConnectorCall::for_operation(
-        RuntimeConnectorIdentity::new("nodeplan.local", "nodeplan"),
-        "nodeplan-control",
+        RuntimeConnectorIdentity::new("fleet.local", "fleet"),
+        "fleet-control",
         "grep_errors",
         plan,
         grep_operation,
@@ -135,7 +135,7 @@ fn observation_record(runbook_id: &str, acknowledged_reason: &str, recorded_reas
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = observation_runbook(runbook_id)
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("observation-only runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let transition = plan
@@ -160,17 +160,17 @@ fn observation_record(runbook_id: &str, acknowledged_reason: &str, recorded_reas
 
 fn journal() -> DecisionRunbookJournal {
     let first = observation_record(
-        "nodeplan.error_review.runbook",
+        "fleet.error_review.runbook",
         "operator accepted grep evidence",
         "grep evidence showed no blocking errors",
     );
     let second = observation_record(
-        "nodeplan.process_review.runbook",
+        "fleet.process_review.runbook",
         "operator accepted process evidence",
         "process evidence allowed next step",
     );
 
-    DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&first, "grep found no blocking ERROR lines")
         .append(&second, "pgrep/process review allowed dry-run path")
 }
@@ -180,7 +180,7 @@ fn context_pack_selects_last_replay_steps_for_compact_context() {
     let journal = journal();
 
     let pack = DecisionContextPack::from_journal_selection(
-        "nodeplan.bootstrap.context",
+        "fleet.bootstrap.context",
         "Decide what compact history should enter the next step.",
         &journal,
         DecisionContextPackReplaySelection::Last(1),
@@ -200,7 +200,7 @@ fn context_pack_rejects_empty_or_out_of_bounds_selection() {
     let journal = journal();
 
     let empty = DecisionContextPack::from_journal_selection(
-        "nodeplan.bootstrap.context",
+        "fleet.bootstrap.context",
         "empty selections should not be accepted",
         &journal,
         DecisionContextPackReplaySelection::Last(0),
@@ -209,7 +209,7 @@ fn context_pack_rejects_empty_or_out_of_bounds_selection() {
     assert!(matches!(empty, Err(DecisionContextPackError::EmptyReplaySelection)));
 
     let out_of_bounds = DecisionContextPack::from_journal_selection(
-        "nodeplan.bootstrap.context",
+        "fleet.bootstrap.context",
         "bad range should not be accepted",
         &journal,
         DecisionContextPackReplaySelection::Range {
@@ -230,17 +230,17 @@ fn active_runbook_context_pack_links_source_questions_to_replay_context() {
     let (manifest, material_contract) = material_contract(&plan);
     let guide = guide();
     let runbook = DecisionRunbookTemplate::observation_only(
-        "nodeplan.active.runbook",
+        "fleet.active.runbook",
         "Use active source questions with recent replay context.",
         guide.clone(),
     );
     let instance = runbook
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook instance should materialize");
     let journal = journal();
 
     let pack = DecisionContextPack::for_active_runbook(
-        "nodeplan.active.context",
+        "fleet.active.context",
         "Ask only the next useful questions.",
         &journal,
         &guide,
@@ -255,7 +255,7 @@ fn active_runbook_context_pack_links_source_questions_to_replay_context() {
     assert_eq!(pack.active_runbook_contract_digest, Some(instance.contract.digest()));
     assert_eq!(pack.active_guide_digest, Some(guide.digest()));
     assert!(pack.compact_context().contains("Did grep find blocking ERROR lines?"));
-    assert!(pack.compact_context().contains("optional check.nodeplan_process"));
+    assert!(pack.compact_context().contains("optional check.fleet_process"));
     assert!(pack.fits_context_budget());
 }
 
@@ -265,17 +265,17 @@ fn context_pack_digest_tracks_replay_selection_questions_and_budget() {
     let (manifest, material_contract) = material_contract(&plan);
     let guide = guide();
     let runbook = DecisionRunbookTemplate::observation_only(
-        "nodeplan.active.runbook",
+        "fleet.active.runbook",
         "Use active source questions with recent replay context.",
         guide.clone(),
     );
     let instance = runbook
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook instance should materialize");
     let journal = journal();
 
     let all = DecisionContextPack::for_active_runbook(
-        "nodeplan.active.context",
+        "fleet.active.context",
         "Ask only the next useful questions.",
         &journal,
         &guide,
@@ -285,7 +285,7 @@ fn context_pack_digest_tracks_replay_selection_questions_and_budget() {
     )
     .expect("active context pack should form");
     let last = DecisionContextPack::for_active_runbook(
-        "nodeplan.active.context",
+        "fleet.active.context",
         "Ask only the next useful questions.",
         &journal,
         &guide,
@@ -295,7 +295,7 @@ fn context_pack_digest_tracks_replay_selection_questions_and_budget() {
     )
     .expect("active context pack should form");
     let smaller_budget = DecisionContextPack::for_active_runbook(
-        "nodeplan.active.context",
+        "fleet.active.context",
         "Ask only the next useful questions.",
         &journal,
         &guide,
@@ -316,22 +316,22 @@ fn active_context_pack_rejects_wrong_source_guide_for_instance() {
     let (manifest, material_contract) = material_contract(&plan);
     let guide = guide();
     let runbook = DecisionRunbookTemplate::observation_only(
-        "nodeplan.active.runbook",
+        "fleet.active.runbook",
         "Use active source questions with recent replay context.",
         guide.clone(),
     );
     let instance = runbook
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook instance should materialize");
     let wrong_guide = DecisionGuideTemplate::new(
-        "nodeplan.other.guide",
+        "fleet.other.guide",
         "A different guide should not match this runbook instance.",
-        DecisionPathTemplate::new("nodeplan.other.path", "different path"),
+        DecisionPathTemplate::new("fleet.other.path", "different path"),
     );
     let journal = journal();
 
     let result = DecisionContextPack::for_active_runbook(
-        "nodeplan.active.context",
+        "fleet.active.context",
         "Ask only the next useful questions.",
         &journal,
         &wrong_guide,

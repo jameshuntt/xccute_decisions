@@ -23,21 +23,21 @@ fn op(logical_id: &str, program: &str, argv: &[&str]) -> RuntimeOperation {
 }
 
 fn plan() -> RuntimeOperationPlan {
-    RuntimeOperationPlan::new("nodeplan.bootstrap")
-        .then(op("logs.grep_errors", "grep", &["ERROR", "nodeplan.log"]))
-        .then(op("nodeplan.apply_dry_run", "nodeplanctl", &["apply", "--dry-run"]))
-        .then(op("nodeplan.commit_receipt", "nodeplanctl", &["receipt", "commit"]))
+    RuntimeOperationPlan::new("fleet.bootstrap")
+        .then(op("logs.grep_errors", "grep", &["ERROR", "fleet.log"]))
+        .then(op("fleet.apply_dry_run", "fleetctl", &["apply", "--dry-run"]))
+        .then(op("fleet.commit_receipt", "fleetctl", &["receipt", "commit"]))
 }
 
 fn material_contract(plan: &RuntimeOperationPlan) -> (RuntimeMaterialManifest, RuntimePlanMaterialContract) {
-    let manifest = RuntimeMaterialManifest::new("nodeplan.materials");
+    let manifest = RuntimeMaterialManifest::new("fleet.materials");
     let contract = RuntimePlanMaterialContract::new(plan, &manifest);
     (manifest, contract)
 }
 
 fn guide() -> DecisionGuideTemplate {
     let path = DecisionPathTemplate::new(
-        "nodeplan.error_review.path",
+        "fleet.error_review.path",
         "Ask one bounded question before dry-run apply.",
     )
     .step(DecisionPathStep::required_observation(
@@ -49,13 +49,13 @@ fn guide() -> DecisionGuideTemplate {
     ))
     .step(DecisionPathStep::operation(
         "apply.dry_run",
-        "nodeplan.apply_dry_run",
+        "fleet.apply_dry_run",
         "Dry-run can happen after required evidence exists.",
     ));
 
     DecisionGuideTemplate::new(
-        "nodeplan.error_review.guide",
-        "Decide whether the NodePlan dry-run should run.",
+        "fleet.error_review.guide",
+        "Decide whether the Supervisor dry-run should run.",
         path,
     )
     .ask(DecisionQuestionSpec::required(
@@ -68,13 +68,13 @@ fn guide() -> DecisionGuideTemplate {
 
 fn connector_runbook() -> DecisionRunbookTemplate {
     DecisionRunbookTemplate::connector_execution(
-        "nodeplan.bootstrap.runbook",
-        "NodePlan bootstrap should ask focused questions before dry-run apply.",
+        "fleet.bootstrap.runbook",
+        "Supervisor bootstrap should ask focused questions before dry-run apply.",
         guide(),
-        DecisionConnectorSpec::nodeplan(
-            "nodeplan.local",
+        DecisionConnectorSpec::supervisor(
+            "fleet.local",
             "apply_dry_run",
-            "nodeplan.apply_dry_run",
+            "fleet.apply_dry_run",
             "Run only after required observation evidence is available.",
         ),
     )
@@ -82,7 +82,7 @@ fn connector_runbook() -> DecisionRunbookTemplate {
 
 fn observation_runbook() -> DecisionRunbookTemplate {
     DecisionRunbookTemplate::observation_only(
-        "nodeplan.observation.runbook",
+        "fleet.observation.runbook",
         "Only ask focused questions and acknowledge the decision path.",
         guide(),
     )
@@ -98,8 +98,8 @@ fn observation_context(
         .operation_by_logical_id("logs.grep_errors")
         .expect("grep operation exists");
     let call = RuntimeConnectorCall::for_operation(
-        RuntimeConnectorIdentity::new("nodeplan.local", "nodeplan"),
-        "nodeplan-control",
+        RuntimeConnectorIdentity::new("fleet.local", "fleet"),
+        "fleet-control",
         "grep_errors",
         plan,
         grep_operation,
@@ -148,7 +148,7 @@ fn execution_receipt(
     let intent = RuntimeConnectorExecutionIntent::prepare(call.clone(), material_contract, manifest)
         .expect("empty material manifest should satisfy gate");
     let operation = plan
-        .operation_by_logical_id("nodeplan.apply_dry_run")
+        .operation_by_logical_id("fleet.apply_dry_run")
         .expect("apply operation exists");
     let decision = ExitStatusPolicy::new()
         .with_rule(ExitStatusRule::accepted_code(
@@ -160,7 +160,7 @@ fn execution_receipt(
     let connector_observation = RuntimeConnectorObservation::new(
         &call,
         RuntimeExitStatus::new(Some(0), true),
-        "nodeplan dry-run accepted",
+        "fleet dry-run accepted",
     );
     let connector_receipt = RuntimeConnectorReceipt::from_decision(
         call,
@@ -183,8 +183,8 @@ fn wrong_execution_receipt(
         .operation_by_logical_id("logs.grep_errors")
         .expect("grep operation exists");
     let call = RuntimeConnectorCall::for_operation(
-        RuntimeConnectorIdentity::new("nodeplan.local", "nodeplan"),
-        "nodeplan-control",
+        RuntimeConnectorIdentity::new("fleet.local", "fleet"),
+        "fleet-control",
         "grep_errors",
         plan,
         operation,
@@ -222,7 +222,7 @@ fn runbook_record_links_context_execution_observation_receipt_and_trace() {
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = connector_runbook()
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let execution_receipt = execution_receipt(&plan, &manifest, &material_contract, &instance);
@@ -245,8 +245,8 @@ fn runbook_record_links_context_execution_observation_receipt_and_trace() {
         &requirement,
         &RuntimeConnectorExecutionIntent::prepare(
             RuntimeConnectorCall::for_operation(
-                RuntimeConnectorIdentity::new("nodeplan.local", "nodeplan"),
-                "nodeplan-control",
+                RuntimeConnectorIdentity::new("fleet.local", "fleet"),
+                "fleet-control",
                 "grep_errors",
                 &plan,
                 grep_operation,
@@ -281,7 +281,7 @@ fn runbook_record_links_context_execution_observation_receipt_and_trace() {
         &execution_receipt.connector_receipt.transition,
         "bounded evidence and dry-run exit status justify commit receipt",
     );
-    let trace = RuntimeExecutionTrace::new("nodeplan.bootstrap.trace").append(
+    let trace = RuntimeExecutionTrace::new("fleet.bootstrap.trace").append(
         &execution_receipt,
         Some(&observation_receipt),
         "runbook accepted the dry-run transition",
@@ -298,7 +298,7 @@ fn runbook_record_links_context_execution_observation_receipt_and_trace() {
     )
     .expect("valid record should form");
 
-    assert_eq!(record.runbook_id, "nodeplan.bootstrap.runbook");
+    assert_eq!(record.runbook_id, "fleet.bootstrap.runbook");
     assert_eq!(record.contract_digest, instance.contract.digest());
     assert_eq!(record.execution_receipt_digest, Some(execution_receipt.digest()));
     assert_eq!(record.observation_receipt_digest, Some(observation_receipt.digest()));
@@ -311,7 +311,7 @@ fn runbook_record_rejects_wrong_connector_execution_receipt() {
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = connector_runbook()
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let wrong_receipt = wrong_execution_receipt(&plan, &manifest, &material_contract);
@@ -342,7 +342,7 @@ fn runbook_record_rejects_trace_that_does_not_include_expected_observation_recei
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = connector_runbook()
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let execution_receipt = execution_receipt(&plan, &manifest, &material_contract, &instance);
@@ -352,8 +352,8 @@ fn runbook_record_rejects_trace_that_does_not_include_expected_observation_recei
         &requirement,
         &RuntimeConnectorExecutionIntent::prepare(
             RuntimeConnectorCall::for_operation(
-                RuntimeConnectorIdentity::new("nodeplan.local", "nodeplan"),
-                "nodeplan-control",
+                RuntimeConnectorIdentity::new("fleet.local", "fleet"),
+                "fleet-control",
                 "grep_errors",
                 &plan,
                 grep_operation,
@@ -388,7 +388,7 @@ fn runbook_record_rejects_trace_that_does_not_include_expected_observation_recei
         &execution_receipt.connector_receipt.transition,
         "bounded evidence and dry-run exit status justify commit receipt",
     );
-    let trace_without_observation = RuntimeExecutionTrace::new("nodeplan.bootstrap.trace")
+    let trace_without_observation = RuntimeExecutionTrace::new("fleet.bootstrap.trace")
         .append(&execution_receipt, None, "missing observation receipt");
 
     let result = DecisionRunbookRecord::connector_execution(
@@ -412,7 +412,7 @@ fn observation_only_runbook_record_has_no_connector_execution_receipt() {
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = observation_runbook()
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("observation-only runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let transition = plan
@@ -449,7 +449,7 @@ fn observation_only_record_rejects_connector_execution_runbook() {
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = connector_runbook()
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let transition = plan

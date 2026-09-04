@@ -24,21 +24,21 @@ fn op(logical_id: &str, program: &str, argv: &[&str]) -> RuntimeOperation {
 }
 
 fn plan() -> RuntimeOperationPlan {
-    RuntimeOperationPlan::new("nodeplan.bootstrap")
-        .then(op("logs.grep_errors", "grep", &["ERROR", "nodeplan.log"]))
-        .then(op("nodeplan.apply_dry_run", "nodeplanctl", &["apply", "--dry-run"]))
-        .then(op("nodeplan.commit_receipt", "nodeplanctl", &["receipt", "commit"]))
+    RuntimeOperationPlan::new("fleet.bootstrap")
+        .then(op("logs.grep_errors", "grep", &["ERROR", "fleet.log"]))
+        .then(op("fleet.apply_dry_run", "fleetctl", &["apply", "--dry-run"]))
+        .then(op("fleet.commit_receipt", "fleetctl", &["receipt", "commit"]))
 }
 
 fn material_contract(plan: &RuntimeOperationPlan) -> (RuntimeMaterialManifest, RuntimePlanMaterialContract) {
-    let manifest = RuntimeMaterialManifest::new("nodeplan.materials");
+    let manifest = RuntimeMaterialManifest::new("fleet.materials");
     let contract = RuntimePlanMaterialContract::new(plan, &manifest);
     (manifest, contract)
 }
 
 fn guide() -> DecisionGuideTemplate {
     let path = DecisionPathTemplate::new(
-        "nodeplan.error_review.path",
+        "fleet.error_review.path",
         "Ask one bounded question before dry-run apply.",
     )
     .step(DecisionPathStep::required_observation(
@@ -50,13 +50,13 @@ fn guide() -> DecisionGuideTemplate {
     ))
     .step(DecisionPathStep::operation(
         "apply.dry_run",
-        "nodeplan.apply_dry_run",
+        "fleet.apply_dry_run",
         "Dry-run can happen after required evidence exists.",
     ));
 
     DecisionGuideTemplate::new(
-        "nodeplan.error_review.guide",
-        "Decide whether the NodePlan dry-run should run.",
+        "fleet.error_review.guide",
+        "Decide whether the Supervisor dry-run should run.",
         path,
     )
     .ask(DecisionQuestionSpec::required(
@@ -85,8 +85,8 @@ fn observation_context(
         .operation_by_logical_id("logs.grep_errors")
         .expect("grep operation exists");
     let call = RuntimeConnectorCall::for_operation(
-        RuntimeConnectorIdentity::new("nodeplan.local", "nodeplan"),
-        "nodeplan-control",
+        RuntimeConnectorIdentity::new("fleet.local", "fleet"),
+        "fleet-control",
         "grep_errors",
         plan,
         grep_operation,
@@ -125,7 +125,7 @@ fn observation_record(runbook_id: &str, acknowledged_reason: &str, recorded_reas
     let plan = plan();
     let (manifest, material_contract) = material_contract(&plan);
     let instance = observation_runbook(runbook_id)
-        .materialize(&plan, &manifest, &material_contract, "nodeplan.observations")
+        .materialize(&plan, &manifest, &material_contract, "fleet.observations")
         .expect("observation-only runbook should materialize");
     let context = observation_context(&plan, &manifest, &material_contract, &instance);
     let transition = plan
@@ -151,17 +151,17 @@ fn observation_record(runbook_id: &str, acknowledged_reason: &str, recorded_reas
 #[test]
 fn journal_appends_records_into_ordered_digest_chain() {
     let first = observation_record(
-        "nodeplan.error_review.runbook",
+        "fleet.error_review.runbook",
         "operator accepted grep evidence",
         "grep evidence showed no blocking errors",
     );
     let second = observation_record(
-        "nodeplan.process_review.runbook",
+        "fleet.process_review.runbook",
         "operator accepted process evidence",
         "process evidence allowed next step",
     );
 
-    let journal = DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    let journal = DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&first, "grep found no blocking ERROR lines")
         .append(&second, "pgrep/process review allowed dry-run path");
 
@@ -176,7 +176,7 @@ fn journal_appends_records_into_ordered_digest_chain() {
     assert!(journal.compact_context().contains("pgrep/process review allowed"));
 
     let validated = DecisionRunbookJournal::try_from_entries(
-        "nodeplan.bootstrap.journal",
+        "fleet.bootstrap.journal",
         journal.entries.clone(),
     )
     .expect("valid append-only entries should validate");
@@ -185,15 +185,15 @@ fn journal_appends_records_into_ordered_digest_chain() {
 
 #[test]
 fn journal_rejects_broken_previous_entry_link() {
-    let first = observation_record("nodeplan.error_review.runbook", "ack one", "record one");
-    let second = observation_record("nodeplan.process_review.runbook", "ack two", "record two");
-    let journal = DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    let first = observation_record("fleet.error_review.runbook", "ack one", "record one");
+    let second = observation_record("fleet.process_review.runbook", "ack two", "record two");
+    let journal = DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&first, "first summary")
         .append(&second, "second summary");
     let mut entries = journal.entries.clone();
     entries[1].previous_entry_digest = Some(StableDigest::sha256("wrong previous digest"));
 
-    let result = DecisionRunbookJournal::try_from_entries("nodeplan.bootstrap.journal", entries);
+    let result = DecisionRunbookJournal::try_from_entries("fleet.bootstrap.journal", entries);
 
     assert!(matches!(
         result,
@@ -203,13 +203,13 @@ fn journal_rejects_broken_previous_entry_link() {
 
 #[test]
 fn journal_rejects_out_of_order_index() {
-    let first = observation_record("nodeplan.error_review.runbook", "ack one", "record one");
-    let journal = DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    let first = observation_record("fleet.error_review.runbook", "ack one", "record one");
+    let journal = DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&first, "first summary");
     let mut entries = journal.entries.clone();
     entries[0].index = 7;
 
-    let result = DecisionRunbookJournal::try_from_entries("nodeplan.bootstrap.journal", entries);
+    let result = DecisionRunbookJournal::try_from_entries("fleet.bootstrap.journal", entries);
 
     assert!(matches!(
         result,
@@ -222,12 +222,12 @@ fn journal_rejects_out_of_order_index() {
 
 #[test]
 fn journal_rejects_duplicate_record_digest() {
-    let record = observation_record("nodeplan.error_review.runbook", "ack one", "record one");
+    let record = observation_record("fleet.error_review.runbook", "ack one", "record one");
     let first = DecisionRunbookJournalEntry::new(0, None, &record, "first summary");
     let second = DecisionRunbookJournalEntry::new(1, Some(first.digest()), &record, "second summary");
 
     let result = DecisionRunbookJournal::try_from_entries(
-        "nodeplan.bootstrap.journal",
+        "fleet.bootstrap.journal",
         vec![first, second],
     );
 
@@ -243,16 +243,16 @@ fn journal_rejects_duplicate_record_digest() {
 
 #[test]
 fn journal_digest_tracks_order_and_compact_summary() {
-    let first = observation_record("nodeplan.error_review.runbook", "ack one", "record one");
-    let second = observation_record("nodeplan.process_review.runbook", "ack two", "record two");
+    let first = observation_record("fleet.error_review.runbook", "ack one", "record one");
+    let second = observation_record("fleet.process_review.runbook", "ack two", "record two");
 
-    let journal_a = DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    let journal_a = DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&first, "first summary")
         .append(&second, "second summary");
-    let journal_b = DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    let journal_b = DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&second, "second summary")
         .append(&first, "first summary");
-    let journal_c = DecisionRunbookJournal::new("nodeplan.bootstrap.journal")
+    let journal_c = DecisionRunbookJournal::new("fleet.bootstrap.journal")
         .append(&first, "changed first summary")
         .append(&second, "second summary");
 

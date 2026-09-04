@@ -4,7 +4,7 @@
 //! questions to ask, observation tool responsibilities, optional/required path
 //! steps, and compact evidence expectations. The runtime still owns execution,
 //! material verification, connector receipts, and trace receipts. This crate is
-//! the place where NodePlan/denv-style connectors can describe *why* a process
+//! the place where supervisor-style connectors can describe *why* a process
 //! asks for a check before deciding what to do next.
 
 pub mod context_pack;

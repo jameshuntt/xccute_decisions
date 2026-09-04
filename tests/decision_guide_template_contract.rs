@@ -12,25 +12,25 @@ use xccute_decisions::{
 use xccute_runtime::{RuntimeOperation, RuntimeOperationPlan};
 
 fn plan() -> RuntimeOperationPlan {
-    RuntimeOperationPlan::new("nodeplan.review")
+    RuntimeOperationPlan::new("fleet.review")
         .then(RuntimeOperation::new(
             "logs.grep_errors",
             OsString::from("grep"),
-            vec![OsString::from("ERROR"), OsString::from("nodeplan.log")],
-            "grep ERROR nodeplan.log",
+            vec![OsString::from("ERROR"), OsString::from("fleet.log")],
+            "grep ERROR fleet.log",
         ))
         .then(RuntimeOperation::new(
-            "nodeplan.commit_receipt",
-            OsString::from("nodeplanctl"),
+            "fleet.commit_receipt",
+            OsString::from("fleetctl"),
             vec![OsString::from("commit-receipt")],
-            "nodeplanctl commit-receipt",
+            "fleetctl commit-receipt",
         ))
 }
 
 #[test]
 fn decision_guide_template_materializes_runtime_guide_and_observation_plan() {
     let path = DecisionPathTemplate::new(
-        "nodeplan.error_review",
+        "fleet.error_review",
         "Only continue if no blocking error evidence exists.",
     )
     .step(DecisionPathStep::required_observation(
@@ -42,13 +42,13 @@ fn decision_guide_template_materializes_runtime_guide_and_observation_plan() {
     ))
     .step(DecisionPathStep::operation(
         "commit.receipt",
-        "nodeplan.commit_receipt",
+        "fleet.commit_receipt",
         "Commit only after an evidence-backed decision.",
     ));
 
     let guide = DecisionGuideTemplate::new(
-        "nodeplan.error_review.guide",
-        "Decide whether the NodePlan dry-run log is safe to commit.",
+        "fleet.error_review.guide",
+        "Decide whether the Supervisor dry-run log is safe to commit.",
         path,
     )
     .ask(DecisionQuestionSpec::required(
@@ -60,10 +60,10 @@ fn decision_guide_template_materializes_runtime_guide_and_observation_plan() {
 
     let runtime_guide = guide.materialize_runtime_guide(&plan()).expect("runtime guide");
     let observation_plan = guide
-        .materialize_observation_plan(&plan(), "nodeplan.error_review.observations")
+        .materialize_observation_plan(&plan(), "fleet.error_review.observations")
         .expect("observation plan");
 
-    assert_eq!(runtime_guide.guide_id, "nodeplan.error_review.guide");
+    assert_eq!(runtime_guide.guide_id, "fleet.error_review.guide");
     assert_eq!(runtime_guide.questions.len(), 1);
     assert_eq!(observation_plan.requirements.len(), 1);
     assert_eq!(observation_plan.requirements[0].logical_id, "check.errors");
@@ -71,7 +71,7 @@ fn decision_guide_template_materializes_runtime_guide_and_observation_plan() {
 
 #[test]
 fn decision_guide_template_rejects_missing_required_path_question() {
-    let path = DecisionPathTemplate::new("nodeplan.error_review", "goal")
+    let path = DecisionPathTemplate::new("fleet.error_review", "goal")
         .step(DecisionPathStep::required_observation(
             "ask.error_pattern",
             "grep.pattern_search",
@@ -93,7 +93,7 @@ fn decision_guide_template_rejects_missing_required_path_question() {
 
 #[test]
 fn decision_guide_template_allows_optional_questions_without_making_them_required() {
-    let path = DecisionPathTemplate::new("denv.probe", "Probe before selecting setup path.")
+    let path = DecisionPathTemplate::new("envd.probe", "Probe before selecting setup path.")
         .step(DecisionPathStep::required_observation(
             "ask.config",
             "grep.pattern_search",
@@ -105,11 +105,11 @@ fn decision_guide_template_allows_optional_questions_without_making_them_require
             "ask.worker",
             "pgrep.process_search",
             "check.worker",
-            "nodeplan.pgrep_worker",
+            "fleet.pgrep_worker",
             "Optionally see if a worker is already running.",
         ));
 
-    let guide = DecisionGuideTemplate::new("denv.probe.guide", "Probe with bounded evidence.", path)
+    let guide = DecisionGuideTemplate::new("envd.probe.guide", "Probe with bounded evidence.", path)
         .ask(DecisionQuestionSpec::required(
             "check.config",
             "logs.grep_errors",
@@ -118,7 +118,7 @@ fn decision_guide_template_allows_optional_questions_without_making_them_require
         ))
         .ask(DecisionQuestionSpec::optional(
             "check.worker",
-            "nodeplan.pgrep_worker",
+            "fleet.pgrep_worker",
             &pgrep_observation_tool(),
             "Was the worker already running?",
         ));
