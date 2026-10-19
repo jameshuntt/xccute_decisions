@@ -1,0 +1,68 @@
+# Tests every push and pull request on the newest Rust and on the oldest one
+# this crate supports (rust-version in Cargo.toml), and runs clippy.
+# It does not publish: main carries a version that is not on crates.io yet, so the
+# publish job (the one in 1o-llc/maintenance's ci.yml) is left out until that release is ready.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # the crates this repo publishes, in the order they depend on each other
+  CRATES: xccute_decisions
+  # crates this one depends on by path; CI clones them next to it
+  SIBLINGS: xccute_contract xccute_runtime
+
+jobs:
+  test:
+    name: test on Rust ${{ matrix.rust }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, "1.70"]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Clone the sibling crates this one builds against (../<name>)
+        # the same branch when a sibling has one, so a change across crates is tested together
+        run: |
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          for s in $SIBLINGS; do
+            git clone --depth 1 --branch "$branch" "https://github.com/jameshuntt/$s.git" "../$s" 2>/dev/null \
+              || git clone --depth 1 "https://github.com/jameshuntt/$s.git" "../$s"
+            echo "$s: $(git -C "../$s" rev-parse --abbrev-ref HEAD) $(git -C "../$s" rev-parse --short HEAD)"
+          done
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Dependency versions the oldest supported Rust can build
+        # the runner's newest cargo writes a fresh Cargo.lock, picking for each dependency the newest version
+        # whose rust-version this one meets
+        if: matrix.rust != 'stable'
+        run: CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo +stable generate-lockfile
+      - name: Test
+        run: cargo test --workspace --all-features
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Clone the sibling crates this one builds against (../<name>)
+        # the same branch when a sibling has one, so a change across crates is tested together
+        run: |
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          for s in $SIBLINGS; do
+            git clone --depth 1 --branch "$branch" "https://github.com/jameshuntt/$s.git" "../$s" 2>/dev/null \
+              || git clone --depth 1 "https://github.com/jameshuntt/$s.git" "../$s"
+            echo "$s: $(git -C "../$s" rev-parse --abbrev-ref HEAD) $(git -C "../$s" rev-parse --short HEAD)"
+          done
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features
