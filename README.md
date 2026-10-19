@@ -13,8 +13,8 @@ Nothing here executes; execution is [`xccute_runtime`](https://crates.io/crates/
 
 ## Releasing
 
-CI (.github/workflows/ci.yml) runs the tests and clippy on every push. It does not publish yet: main carries
-xccute_decisions 0.2.0 (crates.io has 0.1.1), which is not on crates.io, so the publish job is left out until that release is ready.
+Bump `version` in Cargo.toml, add a dated `## <version> (YYYY-MM-DD)` entry to CHANGELOG.md, and push to
+`main`. CI (.github/workflows/ci.yml) runs the tests and clippy, then publishes that version to crates.io.
 
 ## License
 
